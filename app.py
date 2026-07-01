@@ -1,5 +1,6 @@
 from flask import Flask, request, redirect, render_template_string, send_from_directory, session, url_for
 import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -11,6 +12,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploaded_files')
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Custom filter function for your HTML layout to detect images
 @app.template_filter('is_image')
@@ -69,36 +71,51 @@ MY_HTML_CODE = '''
             background: var(--motion-bg); background-size: 400% 400%; animation: gradientMovement 15s ease infinite;
         }
         @keyframes gradientMovement { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-        .top-bar { display: flex; justify-content: flex-end; margin-bottom: 20px; position: relative; z-index: 10; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 10; }
         .theme-toggle-btn {
             background: var(--box-bg); border: 1px solid var(--box-border); color: var(--text-main);
             padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold;
             font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: var(--box-shadow); backdrop-filter: blur(12px);
         }
+        .logout-btn { background: #ff6b6b; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .logout-btn:hover { background: #ee5a52; }
         h2 { color: var(--header-color); margin-top: 0; font-weight: 600; font-size: 1.4rem; display: flex; align-items: center; gap: 10px; }
         .box { 
             background: var(--box-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 25px; border-radius: 16px; 
             border: 1px solid var(--box-border); box-shadow: var(--box-shadow); margin-bottom: 25px; position: relative; z-index: 5;
         }
         .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 0; list-style: none; }
-        .file-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; text-align: center; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.3s ease; }
+        .file-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; text-align: center; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.3s ease; }
         .file-card:hover { transform: translateY(-4px); border-color: var(--header-color); }
         .thumbnail-box { width: 100%; height: 130px; background: var(--thumb-bg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .thumbnail-box img { width: 100%; height: 100%; object-fit: cover; }
         .file-icon { font-size: 45px; }
         .file-info { padding: 12px; font-size: 13px; word-break: break-all; background: var(--footer-bg); border-top: 1px solid var(--card-border); flex-grow: 1; display: flex; align-items: center; justify-content: center; }
         a { color: var(--link-color); text-decoration: none; font-weight: bold; }
-        input[type=text], input[type=password] { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--input-border); padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
-        input[type=file] { color: var(--text-muted); background: var(--input-bg); padding: 10px; border-radius: 8px; border: 1px dashed var(--input-border); width: 100%; box-sizing: border-box; margin-bottom: 20px; }
-        input[type=submit], .login-btn { background: var(--btn-gradient); color: var(--btn-text); border: 0; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
+        input[type=text], input[type=password] { background: var(--input-bg); color: var(--text-main); border: 1px solid var(--input-border); padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+        input[type=file] { color: var(--text-muted); background: var(--input-bg); padding: 10px; border-radius: 8px; border: 1px dashed var(--input-border); width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+        input[type=submit], .login-btn { background: var(--btn-gradient); color: var(--btn-text); border: 0; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: all 0.3s ease; }
+        input[type=submit]:hover, .login-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
 
     <div class="top-bar">
-        <button class="theme-toggle-btn" id="themeToggle">
-            <span id="themeIcon">🌙</span> <span id="themeText">Dark Mode</span>
-        </button>
+        {% if current_user %}
+            <div style="color: var(--text-main); font-weight: bold;">👤 {{ current_user }}</div>
+            <div style="display: flex; gap: 10px;">
+                <button class="theme-toggle-btn" id="themeToggle">
+                    <span id="themeIcon">🌙</span> <span id="themeText">Dark Mode</span>
+                </button>
+                <form method="post" action="/logout" style="margin: 0;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+        {% else %}
+            <button class="theme-toggle-btn" id="themeToggle">
+                <span id="themeIcon">🌙</span> <span id="themeText">Dark Mode</span>
+            </button>
+        {% endif %}
     </div>
 
     {% if current_user %}
@@ -174,7 +191,9 @@ MY_HTML_CODE = '''
 @app.route('/')
 def index():
     current_user = session.get('user')
-    files = os.listdir(app.config['UPLOAD_FOLDER'])
+    files = []
+    if current_user and os.path.exists(app.config['UPLOAD_FOLDER']):
+        files = os.listdir(app.config['UPLOAD_FOLDER'])
     error_msg = request.args.get('error_msg')
     return render_template_string(MY_HTML_CODE, current_user=current_user, files=files, error_msg=error_msg)
 
@@ -183,21 +202,41 @@ def login():
     username = request.form.get('username')
     password = request.form.get('password')
     
-    # Simple default credentials change these if you want!
-    if username == "admin" and password == "123":
+    # Simple default credentials - change these if you want!
+    if username == "admin" and password == "password123":
         session['user'] = username
         return redirect(url_for('index'))
     else:
         return redirect(url_for('index', error_msg="Invalid credentials!"))
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('index'))
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'user' not in session:
         return redirect(url_for('index'))
     if 'file' not in request.files:
-        return redirect(url_for('index'))
+        return redirect(url_for('index', error_msg="No file provided"))
     
     file = request.files['file']
     if file.filename == '':
+        return redirect(url_for('index', error_msg="No file selected"))
+    
+    if file:
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         return redirect(url_for('index'))
-        
+    
+    return redirect(url_for('index', error_msg="Upload failed"))
+
+@app.route('/files/<filename>')
+def serve_file(filename):
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    return send_from_directory(app.config['UPLOAD_FOLDER'], secure_filename(filename))
+
+if __name__ == '__main__':
+    app.run(debug=True)
