@@ -184,7 +184,7 @@ def login():
     password = request.form.get('password')
     
     # Simple default credentials change these if you want!
-    if username == "admin" and password == "password123":
+    if username == "admin" and password == "123":
         session['user'] = username
         return redirect(url_for('index'))
     else:
