@@ -190,53 +190,72 @@ MY_HTML_CODE = '''
 
 @app.route('/')
 def index():
-    current_user = session.get('user')
-    files = []
-    if current_user and os.path.exists(app.config['UPLOAD_FOLDER']):
-        files = os.listdir(app.config['UPLOAD_FOLDER'])
-    error_msg = request.args.get('error_msg')
-    return render_template_string(MY_HTML_CODE, current_user=current_user, files=files, error_msg=error_msg)
+    try:
+        current_user = session.get('user')
+        files = []
+        if current_user and os.path.exists(app.config['UPLOAD_FOLDER']):
+            files = os.listdir(app.config['UPLOAD_FOLDER'])
+        error_msg = request.args.get('error_msg')
+        return render_template_string(MY_HTML_CODE, current_user=current_user, files=files, error_msg=error_msg)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route('/login', methods=['POST'])
 def login():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    # Simple default credentials - change these if you want!
-    if username == "admin" and password == "password123":
-        session['user'] = username
-        return redirect(url_for('index'))
-    else:
-        return redirect(url_for('index', error_msg="Invalid credentials!"))
+    try:
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Simple default credentials - change these if you want!
+        if username == "admin" and password == "password123":
+            session['user'] = username
+            return redirect(url_for('index'))
+        else:
+            return redirect(url_for('index', error_msg="Invalid credentials!"))
+    except Exception as e:
+        return redirect(url_for('index', error_msg="Login error"))
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.pop('user', None)
-    return redirect(url_for('index'))
+    try:
+        session.pop('user', None)
+        return redirect(url_for('index'))
+    except Exception as e:
+        return redirect(url_for('index'))
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    if 'file' not in request.files:
-        return redirect(url_for('index', error_msg="No file provided"))
-    
-    file = request.files['file']
-    if file.filename == '':
-        return redirect(url_for('index', error_msg="No file selected"))
-    
-    if file:
-        filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        return redirect(url_for('index'))
-    
-    return redirect(url_for('index', error_msg="Upload failed"))
+    try:
+        if 'user' not in session:
+            return redirect(url_for('index'))
+        if 'file' not in request.files:
+            return redirect(url_for('index', error_msg="No file provided"))
+        
+        file = request.files['file']
+        if file.filename == '':
+            return redirect(url_for('index', error_msg="No file selected"))
+        
+        if file:
+            filename = secure_filename(file.filename)
+            if filename:
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                return redirect(url_for('index'))
+        
+        return redirect(url_for('index', error_msg="Upload failed"))
+    except Exception as e:
+        return redirect(url_for('index', error_msg="Upload error"))
 
 @app.route('/files/<filename>')
 def serve_file(filename):
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    return send_from_directory(app.config['UPLOAD_FOLDER'], secure_filename(filename))
+    try:
+        if 'user' not in session:
+            return redirect(url_for('index'))
+        secure_name = secure_filename(filename)
+        if not secure_name:
+            return "Invalid filename", 400
+        return send_from_directory(app.config['UPLOAD_FOLDER'], secure_name)
+    except Exception as e:
+        return "File not found", 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, host='0.0.0.0', port=5000)
